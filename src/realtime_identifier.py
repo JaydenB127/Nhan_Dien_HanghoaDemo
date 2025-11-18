@@ -10,7 +10,7 @@ import csv
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -20,6 +20,15 @@ from ultralytics import YOLO
 DEFAULT_MODEL_PATH = Path("models/yolov8_best.pt")
 DEFAULT_LOG_PATH = Path("data/detection_log.csv")
 DEFAULT_SAVE_DIR = Path("img/detections")
+DEFAULT_SOFT_DRINK_CLASSES: Tuple[str, ...] = (
+    "coca cola",
+    "pepsi",
+    "sprite",
+    "fanta",
+    "7up",
+    "mirinda",
+    "mountain dew",
+)
 
 
 class RealTimeProductIdentifier:
@@ -36,6 +45,11 @@ class RealTimeProductIdentifier:
         is enabled.
     conf_threshold:
         Minimum confidence threshold for retaining detections.
+    class_names:
+        Iterable of class labels to keep. By default, the detector is restricted to
+        common soft drink brands so you can focus on beverage recognition. Set to
+        ``None`` to keep all YOLO classes or provide a path to a newline-delimited
+        label list for your own taxonomy.
     """
 
     def __init__(
@@ -44,11 +58,14 @@ class RealTimeProductIdentifier:
         log_path: Union[str, Path] = DEFAULT_LOG_PATH,
         save_dir: Union[str, Path] = DEFAULT_SAVE_DIR,
         conf_threshold: float = 0.4,
+        class_names: Optional[Union[Iterable[str], str, Path]] = DEFAULT_SOFT_DRINK_CLASSES,
     ) -> None:
         self.model_path = Path(model_path)
         self.log_path = Path(log_path)
         self.save_dir = Path(save_dir)
         self.conf_threshold = conf_threshold
+        self.class_names: Optional[List[str]] = self._load_class_names(class_names)
+        self._class_name_set = {name.lower() for name in self.class_names} if self.class_names else None
 
         self._ensure_directories()
         self.model = self._load_model(self.model_path)
@@ -82,6 +99,37 @@ class RealTimeProductIdentifier:
                 "model in the models/ directory."
             )
         return YOLO(model_path.as_posix())
+
+    def _load_class_names(
+        self, class_names: Optional[Union[Iterable[str], str, Path]]
+    ) -> Optional[List[str]]:
+        """Normalise a list of class names for filtering detections.
+
+        Parameters
+        ----------
+        class_names:
+            Either an iterable of strings or a path to a newline-delimited file.
+            ``None`` disables filtering and preserves all YOLO labels.
+
+        Returns
+        -------
+        list[str] | None
+            Normalised list of class names or ``None`` when filtering is disabled.
+        """
+
+        if class_names is None:
+            return None
+        if isinstance(class_names, (str, Path)):
+            if str(class_names).strip() == "":
+                return None
+            path = Path(class_names)
+            if not path.exists():
+                raise FileNotFoundError(
+                    f"Class name file not found at {path}. Provide a newline-separated "
+                    "list of soft drink labels."
+                )
+            return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [name.strip() for name in class_names if str(name).strip()]
 
     def start_stream(self, source: Union[int, str], save: bool = False) -> None:
         """Start the real-time detection loop.
@@ -145,6 +193,8 @@ class RealTimeProductIdentifier:
                 continue
             cls_id = int(box.cls[0])
             label = self._label_from_names(names, cls_id)
+            if self._class_name_set and label.lower() not in self._class_name_set:
+                continue
             detections[label] += 1
             confidences.append(conf)
 
