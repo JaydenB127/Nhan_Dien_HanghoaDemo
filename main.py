@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import argparse
 
-from src.realtime_identifier import RealTimeProductIdentifier, parse_source
+from src.realtime_identifier import (
+    DEFAULT_SOFT_DRINK_CLASSES,
+    RealTimeProductIdentifier,
+    parse_source,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +41,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="models/yolov8_best.pt",
         help="Path to the YOLOv8 weight file.",
     )
+    parser.add_argument(
+        "--class-names",
+        type=str,
+        default=None,
+        help=(
+            "Optional path to a newline-delimited list of class names. When not set, "
+            "the detector filters to common soft drink brands: "
+            f"{', '.join(DEFAULT_SOFT_DRINK_CLASSES)}"
+        ),
+    )
     return parser
 
 
@@ -49,6 +63,7 @@ def main() -> None:
         identifier = RealTimeProductIdentifier(
             model_path=args.model,
             conf_threshold=args.confidence,
+            class_names=args.class_names,
         )
     except FileNotFoundError as exc:
         raise SystemExit(str(exc)) from exc

@@ -82,6 +82,7 @@ python main.py --source 0 --save
 - Use `--source 0` for the default webcam or provide an IP stream URL such as `http://192.168.x.x:8080/video`.
 - Add `--save` to persist annotated frames under `img/detections/`.
 - Detections are appended to `data/detection_log.csv` with timestamps, predicted product labels, confidence scores, and per-frame counts.
+- The detector is pre-filtered to common soft drink brands (Coca Cola, Pepsi, Sprite, Fanta, 7Up, Mirinda, Mountain Dew). Provide `--class-names path/to/labels.txt` if you want to load your own newline-delimited label list or set `--class-names` to `""` to keep all YOLO classes.
 
 ### Train the demand forecast model
 
